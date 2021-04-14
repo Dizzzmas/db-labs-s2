@@ -114,7 +114,7 @@ def get_online_users():
 
 @app.route("/chatter-stats", methods=["GET"])
 def get_highest_messaging_activity_stats():
-    """ Get most active users in a descending order. """
+    """ Get users with most delivered messages in a descending order. """
     chatters: List[Dict[str, int]] = fetch_highest_activity_stats(r)
     return dict(chatters=chatters)
 

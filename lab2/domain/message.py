@@ -137,6 +137,7 @@ def fetch_user_inbound_messages(r: Redis, username: str) -> List[Message]:
 
 
 def fetch_messaging_stats_for_user(r: Redis, username: str) -> UserMessagingStats:
+    """ View how many of user's messages are at the moment enqueued/being spam checked/marked as spam/delivered. """
     delivered_messages_count = len(
         r.sinter(get_outbound_messages_list_name(username), DELIVERED_MESSAGES_SET)
     )
@@ -161,12 +162,14 @@ def fetch_messaging_stats_for_user(r: Redis, username: str) -> UserMessagingStat
 
 
 def fetch_most_spamming_users(r: Redis) -> List[Dict[str, int]]:
+    """ Get most spammy users in a descending order. """
     spammers = r.zrange(USERS_BY_SPAM_MESSAGES_SORTED_SET, 0, -1, withscores=True)
     spammers = spammers[::-1]
     return spammers
 
 
 def fetch_highest_activity_stats(r: Redis) -> List[Dict[str, int]]:
+    """ Get users with most delivered messages in a descending order. """
     chatters = r.zrange(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 0, -1, withscores=True)
     chatters = chatters[::-1]
 
@@ -174,11 +177,13 @@ def fetch_highest_activity_stats(r: Redis) -> List[Dict[str, int]]:
 
 
 def fetch_event_journal(r: Redis) -> List[str]:
+    """ Get a list of events for sign in/sign out/ message being marked as spam. """
     events = r.lrange(EVENT_JOURNAL_LIST, 0, -1)
     return events
 
 
 def fetch_online_users(r: Redis) -> List[str]:
+    """ Get a list of online users. """
     online_users = list(r.smembers(ONLINE_USERS_SET))
     return online_users
 
