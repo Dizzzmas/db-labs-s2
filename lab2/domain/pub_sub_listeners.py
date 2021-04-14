@@ -16,6 +16,7 @@ from domain.redis_structures import (
     DELIVERED_MESSAGES_SET,
     USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
     USERS_BY_SPAM_MESSAGES_SORTED_SET,
+    EVENT_JOURNAL_LIST,
 )
 
 
@@ -47,7 +48,11 @@ class EventJournalListener(PubSubListener):
         self.pubsub.subscribe([EVENT_JOURNAL_CHANNEL])
 
     def work(self, item):
+        if item["type"] != "message":
+            return
+        message = item["data"]
         print(item["channel"], ":", item["data"])
+        self.redis.lpush(EVENT_JOURNAL_LIST, message)
 
 
 class MessageQueueListener(PubSubListener):

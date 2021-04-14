@@ -12,14 +12,14 @@ from domain.redis_structures import (
     ENQUEUED_MESSAGES_SET,
     MESSAGE_HASH,
     MESSAGE_INDEX,
-    OUTBOUND_MESSAGES_LIST,
+    OUTBOUND_MESSAGES_SET,
     BEING_SPAM_CHECKED_MESSAGES_SET,
     SPAM_MESSAGES_SET,
     EVENT_JOURNAL_CHANNEL,
     USERS_BY_SPAM_MESSAGES_SORTED_SET,
     DELIVERED_MESSAGES_SET,
     USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
-    INBOUND_MESSAGES_LIST,
+    INBOUND_MESSAGES_SET,
 )
 
 
@@ -56,7 +56,9 @@ def create_message(r, message: RawMessage) -> int:
 
     def create_msg_transaction(p: Pipeline):
         current_id = p.get(MESSAGE_INDEX)
-        new_id = int(current_id) + 1
+        new_id = (
+            int(current_id) + 1 if current_id else 1
+        )  # If id doesn't exist in redis, set it to 1
         p.multi()
         # Increment the message_id and use it to create a new message
         p.incr(MESSAGE_INDEX, 1)
@@ -64,9 +66,9 @@ def create_message(r, message: RawMessage) -> int:
         # Mark the message as enqueued
         p.sadd(ENQUEUED_MESSAGES_SET, new_id)
         # Push to the queue for processing
-        p.lpush(MESSAGE_QUEUE, new_id)
+        p.rpush(MESSAGE_QUEUE, new_id)
         # Add the message to the sender's outbound list
-        p.lpush(get_outbound_messages_list_name(message), new_id)
+        p.sadd(get_outbound_messages_list_name(message["sender"]), new_id)
         # Notify the listener that it should call a worker to process a new message in the queue
         p.publish(MESSAGE_QUEUE_CHANNEL, new_id)
 
@@ -96,19 +98,19 @@ def process_enqueued_message(r: Redis) -> None:
         r.zincrby(USERS_BY_SPAM_MESSAGES_SORTED_SET, 1, message["sender"])
     else:
         # Mark the message as inbound for the recipient
-        r.lpush(get_inbound_messages_list_name(message), message_id)
+        r.sadd(get_inbound_messages_list_name(message["recipient"]), message_id)
         # Mark the message as delivered
         r.smove(BEING_SPAM_CHECKED_MESSAGES_SET, DELIVERED_MESSAGES_SET, message_id)
         # Increment sender's score for sent messages
         r.zincrby(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 1, message["sender"])
 
 
-def get_outbound_messages_list_name(message: RawMessage):
-    return f"{OUTBOUND_MESSAGES_LIST}:{message['sender']}"
+def get_outbound_messages_list_name(sender: str):
+    return f"{OUTBOUND_MESSAGES_SET}:{sender}"
 
 
-def get_inbound_messages_list_name(message: RawMessage):
-    return f"{INBOUND_MESSAGES_LIST}:{message['recipient']}"
+def get_inbound_messages_list_name(recipient: str):
+    return f"{INBOUND_MESSAGES_SET}:{recipient}"
 
 
 def spam_check() -> bool:

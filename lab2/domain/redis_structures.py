@@ -8,9 +8,9 @@ MESSAGE_INDEX = "message_index"
 # List with message ids for in-order spam-checks and delivery
 MESSAGE_QUEUE = "message_queue"
 # Pairs username->[received_message_ids]
-INBOUND_MESSAGES_LIST = "inbound_messages"
-# Pairs username->[send_message_ids]
-OUTBOUND_MESSAGES_LIST = "outbound_messages"
+INBOUND_MESSAGES_SET = "inbound_messages"
+# Pairs username->[sent_message_ids]
+OUTBOUND_MESSAGES_SET = "outbound_messages"
 # Pairs message_id->message_object
 MESSAGE_HASH = "message"
 # Stores ids of enqueued messages foe easy lookup
@@ -28,5 +28,7 @@ USERS_BY_SPAM_MESSAGES_SORTED_SET = "users_by_spam_msg"
 # ------- PUB/SUB -------
 # Used to log user's sign-in/sign-out and results of spam-checks
 EVENT_JOURNAL_CHANNEL = "event_journal"
+# Persist journal messages in-order within a list
+EVENT_JOURNAL_LIST = "events"
 # Before messages are delivered they're put into a queue for processing
 MESSAGE_QUEUE_CHANNEL = "message_queue"
