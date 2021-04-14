@@ -1,6 +1,6 @@
 import json
 from enum import Enum, unique
-from typing import TypedDict
+from typing import TypedDict, List, Dict
 
 from redis.client import Pipeline, Redis
 import random
@@ -20,6 +20,8 @@ from domain.redis_structures import (
     DELIVERED_MESSAGES_SET,
     USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
     INBOUND_MESSAGES_SET,
+    ONLINE_USERS_SET,
+    EVENT_JOURNAL_LIST,
 )
 
 
@@ -49,6 +51,17 @@ class Message(RawMessage):
     """
 
     id: int
+
+
+class UserMessagingStats(TypedDict):
+    """
+    Stats representing suer's messaging activity.
+    """
+
+    delivered: int
+    enqueued: int
+    marked_as_spam: int
+    being_spam_checked: int
 
 
 def create_message(r, message: RawMessage) -> int:
@@ -103,6 +116,71 @@ def process_enqueued_message(r: Redis) -> None:
         r.smove(BEING_SPAM_CHECKED_MESSAGES_SET, DELIVERED_MESSAGES_SET, message_id)
         # Increment sender's score for sent messages
         r.zincrby(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 1, message["sender"])
+
+
+def fetch_user_inbound_messages(r: Redis, username: str) -> List[Message]:
+    """ Get messages received by the user with "username" """
+    inbound_message_ids = r.sinter(
+        get_inbound_messages_list_name(username), DELIVERED_MESSAGES_SET
+    )
+    if not inbound_message_ids:
+        return []
+
+    inbound_messages = r.hmget(MESSAGE_HASH, *inbound_message_ids)
+    messages_with_ids: List[Message] = []
+    for message_id, message in zip(inbound_message_ids, inbound_messages):
+        message = json.loads(message)
+        message["id"] = int(message_id)
+        messages_with_ids.append(message)
+
+    return messages_with_ids
+
+
+def fetch_messaging_stats_for_user(r: Redis, username: str) -> UserMessagingStats:
+    delivered_messages_count = len(
+        r.sinter(get_outbound_messages_list_name(username), DELIVERED_MESSAGES_SET)
+    )
+    enqueued_messages_count = len(
+        r.sinter(get_outbound_messages_list_name(username), ENQUEUED_MESSAGES_SET)
+    )
+    marked_as_spam_count = len(
+        r.sinter(get_outbound_messages_list_name(username), SPAM_MESSAGES_SET)
+    )
+    being_spam_checked_count = len(
+        r.sinter(
+            get_outbound_messages_list_name(username), BEING_SPAM_CHECKED_MESSAGES_SET
+        )
+    )
+
+    return dict(
+        delivered=delivered_messages_count,
+        enqueued=enqueued_messages_count,
+        marked_as_spam=marked_as_spam_count,
+        being_spam_checked=being_spam_checked_count,
+    )
+
+
+def fetch_most_spamming_users(r: Redis) -> List[Dict[str, int]]:
+    spammers = r.zrange(USERS_BY_SPAM_MESSAGES_SORTED_SET, 0, -1, withscores=True)
+    spammers = spammers[::-1]
+    return spammers
+
+
+def fetch_highest_activity_stats(r: Redis) -> List[Dict[str, int]]:
+    chatters = r.zrange(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 0, -1, withscores=True)
+    chatters = chatters[::-1]
+
+    return chatters
+
+
+def fetch_event_journal(r: Redis) -> List[str]:
+    events = r.lrange(EVENT_JOURNAL_LIST, 0, -1)
+    return events
+
+
+def fetch_online_users(r: Redis) -> List[str]:
+    online_users = list(r.smembers(ONLINE_USERS_SET))
+    return online_users
 
 
 def get_outbound_messages_list_name(sender: str):

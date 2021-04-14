@@ -1,5 +1,4 @@
-import json
-from typing import List
+from typing import List, Dict
 
 import redis
 from flask import Flask, request
@@ -15,21 +14,13 @@ from domain.message import (
     create_message,
     RawMessage,
     Message,
-    MessageDeliveryStatus,
-    get_inbound_messages_list_name,
-    get_outbound_messages_list_name,
-)
-from domain.redis_structures import (
-    INBOUND_MESSAGES_SET,
-    DELIVERED_MESSAGES_SET,
-    MESSAGE_HASH,
-    ENQUEUED_MESSAGES_SET,
-    SPAM_MESSAGES_SET,
-    BEING_SPAM_CHECKED_MESSAGES_SET,
-    USERS_BY_SPAM_MESSAGES_SORTED_SET,
-    USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
-    ONLINE_USERS_SET,
-    EVENT_JOURNAL_LIST,
+    UserMessagingStats,
+    fetch_messaging_stats_for_user,
+    fetch_most_spamming_users,
+    fetch_online_users,
+    fetch_user_inbound_messages,
+    fetch_highest_activity_stats,
+    fetch_event_journal,
 )
 from domain.user import login_user, logout_user
 
@@ -95,79 +86,44 @@ def send_message() -> Message:
 def get_inbound_messages():
     """ Get messages received by the user. """
     username: str = request.args.get("username")
-
-    inbound_message_ids = r.sinter(
-        get_inbound_messages_list_name(username), DELIVERED_MESSAGES_SET
-    )
-    inbound_messages = r.hmget(MESSAGE_HASH, *inbound_message_ids)
-    response: List[Message] = []
-    for message_id, message in zip(inbound_message_ids, inbound_messages):
-        message = json.loads(message)
-        message["id"] = int(message_id)
-        response.append(message)
-
-    return dict(messages=response)
+    inbound_messages: List[Message] = fetch_user_inbound_messages(r, username)
+    return inbound_messages
 
 
 @app.route("/user-stats", methods=["GET"])
 def get_message_stats():
     """ Get user's messages by status. """
     username: str = request.args.get("username")
-    delivered_messages_count = len(
-        r.sinter(get_outbound_messages_list_name(username), DELIVERED_MESSAGES_SET)
-    )
-    enqueued_messages_count = len(
-        r.sinter(get_outbound_messages_list_name(username), ENQUEUED_MESSAGES_SET)
-    )
-    marked_as_spam_count = len(
-        r.sinter(get_outbound_messages_list_name(username), SPAM_MESSAGES_SET)
-    )
-    being_spam_checked_count = len(
-        r.sinter(
-            get_outbound_messages_list_name(username), BEING_SPAM_CHECKED_MESSAGES_SET
-        )
-    )
-
-    return dict(
-        delivered=delivered_messages_count,
-        enqueued=enqueued_messages_count,
-        marked_as_spam=marked_as_spam_count,
-        being_spam_checked_count=being_spam_checked_count,
-    )
+    messaging_stats: UserMessagingStats = fetch_messaging_stats_for_user(r, username)
+    return messaging_stats
 
 
 @app.route("/spammer-stats", methods=["GET"])
 def get_spammer_stats():
     """ Get most spammy users in a descending order. """
-    spammers = r.zrange(USERS_BY_SPAM_MESSAGES_SORTED_SET, 0, -1, withscores=True)
-    spammers = spammers[::-1]
-
+    spammers: List[Dict[str, int]] = fetch_most_spamming_users(r)
     return dict(spammers=spammers)
 
 
 @app.route("/online-users", methods=["GET"])
 def get_online_users():
     """ Get a list of online users. """
-    online_users = list(r.smembers(ONLINE_USERS_SET))
-
+    online_users: List[str] = fetch_online_users(r)
     return dict(online_users=online_users)
 
 
 @app.route("/chatter-stats", methods=["GET"])
-def get_highest_activity_stats():
+def get_highest_messaging_activity_stats():
     """ Get most active users in a descending order. """
-    chatters = r.zrange(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 0, -1, withscores=True)
-    chatters = chatters[::-1]
-
+    chatters: List[Dict[str, int]] = fetch_highest_activity_stats(r)
     return dict(chatters=chatters)
 
 
 @app.route("/event-journal", methods=["GET"])
 def get_event_journal():
     """ Get a chronological event log. """
-    events = r.lrange(EVENT_JOURNAL_LIST, 0, -1)
-
-    return dict(chatters=events)
+    events = fetch_event_journal(r)
+    return dict(events=events)
 
 
 if __name__ == "__main__":
