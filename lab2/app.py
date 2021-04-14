@@ -2,32 +2,35 @@ import redis
 from flask import Flask, request
 from flask_smorest import abort
 
-from domain.db import seed_db
-from domain.exceptions import UsernameNotFoundException, AlreadyLoggedInException, NotLoggedInException
-from domain.message import create_message
-from domain.pub_sub_listener import Listener
+from domain.db import seed_db, start_listeners
+from domain.exceptions import (
+    UsernameNotFoundException,
+    AlreadyLoggedInException,
+    NotLoggedInException,
+)
+from domain.message import create_message, RawMessage, Message
 from domain.user import login_user, logout_user
 
 app = Flask(__name__)
 
-app.secret_key = 'asdf'
+app.secret_key = "asdf"
 # Create a connection instance to redis.
-r = redis.Redis('127.0.0.1', decode_responses=True)
+r = redis.Redis("127.0.0.1", decode_responses=True)
 
 
 seed_db(r)
 
 
-@app.route('/')
+@app.route("/")
 def hello():
     return r.get("admin_users")
 
 
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
     if not request.json.get("username"):
         abort(422, message="Missing 'username' in the request body")
-    username = request.json['username']
+    username = request.json["username"]
 
     try:
         login_user(r, username)
@@ -39,11 +42,11 @@ def login():
     return "Logged in."
 
 
-@app.route('/logout', methods=['POST'])
+@app.route("/logout", methods=["POST"])
 def logout():
     if not request.json.get("username"):
         abort(422, message="Missing 'username' in the request body")
-    username = request.json['username']
+    username: str = request.json["username"]
 
     try:
         logout_user(r, username)
@@ -55,24 +58,23 @@ def logout():
     return "Logged out."
 
 
-@app.route('/message', methods=['POST'])
-def send_message():
-    if not request.json.get("sender") or not request.json.get("recipient") or not request.json.get("content"):
+@app.route("/message", methods=["POST"])
+def send_message() -> Message:
+    if (
+        not request.json.get("sender")
+        or not request.json.get("recipient")
+        or not request.json.get("content")
+    ):
         abort(422, message="Missing field in request body")
-    sender = request.json['sender']
-    recipient = request.json['recipient']
-    content = request.json['content']
-    message = dict(sender=sender, recipient=recipient, content=content)
+    sender: str = request.json["sender"]
+    recipient: str = request.json["recipient"]
+    content: str = request.json["content"]
+    message: RawMessage = dict(sender=sender, recipient=recipient, content=content)
 
-    message_id: int = create_message(message)
-    message['id'] = message_id
-    return message
-
+    message_id: int = create_message(r, message)
+    return dict(id=message_id, **message)
 
 
-if __name__ == '__main__':
-    pubsub_listener = Listener(r)
-    pubsub_listener.start()
+if __name__ == "__main__":
+    start_listeners(r)
     app.run()
-
-

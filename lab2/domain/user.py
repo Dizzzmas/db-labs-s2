@@ -1,7 +1,11 @@
 from redis import Redis
 
-from domain.exceptions import UsernameNotFoundException, AlreadyLoggedInException, NotLoggedInException
-from domain.pub_sub_listener import EVENT_JOURNAL_CHANNEL
+from domain.exceptions import (
+    UsernameNotFoundException,
+    AlreadyLoggedInException,
+    NotLoggedInException,
+)
+from domain.pub_sub_listeners import EVENT_JOURNAL_CHANNEL
 
 REGULAR_USERS_SET = "regular_users"
 ADMIN_USERS_SET = "admin_users"
@@ -9,8 +13,8 @@ ONLINE_USERS_SET = "online_users"
 
 
 def login_user(r: Redis, username: str) -> None:
-    """ Notify subscribers about the 'login' event.
-        Make the user appear online, adding him to the "online" Redis set.
+    """Notify subscribers about the 'login' event.
+    Make the user appear online, adding him to the "online" Redis set.
     """
     if username not in r.sunion(REGULAR_USERS_SET, ADMIN_USERS_SET):
         raise UsernameNotFoundException(username)
@@ -22,8 +26,8 @@ def login_user(r: Redis, username: str) -> None:
 
 
 def logout_user(r: Redis, username: str) -> None:
-    """ Notify subscribers about the 'logout' event.
-        Make the user appear offline, removing him from the "online" Redis set.
+    """Notify subscribers about the 'logout' event.
+    Make the user appear offline, removing him from the "online" Redis set.
     """
     if username not in r.sunion(REGULAR_USERS_SET, ADMIN_USERS_SET):
         raise UsernameNotFoundException(username)

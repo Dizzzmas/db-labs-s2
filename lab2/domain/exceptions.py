@@ -1,5 +1,3 @@
-
-
 class UsernameException(Exception):
     username: str
 
