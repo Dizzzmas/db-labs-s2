@@ -1,23 +1,18 @@
-import json
-
-from flask_smorest import abort
-from flask import Flask, request
 import redis
-from redis.client import Pipeline
+from flask import Flask, request
+from flask_smorest import abort
 
 from domain.db import seed_db
-from domain.user import login_user, logout_user
 from domain.exceptions import UsernameNotFoundException, AlreadyLoggedInException, NotLoggedInException
+from domain.message import create_message
 from domain.pub_sub_listener import Listener
+from domain.user import login_user, logout_user
 
 app = Flask(__name__)
 
 app.secret_key = 'asdf'
 # Create a connection instance to redis.
 r = redis.Redis('127.0.0.1', decode_responses=True)
-
-MESSAGE_INDEX = 'message_index'
-MESSAGE_HASH_SET = "message"
 
 
 seed_db(r)
@@ -67,14 +62,12 @@ def send_message():
     sender = request.json['sender']
     recipient = request.json['recipient']
     content = request.json['content']
-
     message = dict(sender=sender, recipient=recipient, content=content)
 
-    message_id = r.incr(MESSAGE_INDEX, 1)
-    r.hset(MESSAGE_HASH_SET, message_id, json.dumps(message))
+    message_id: int = create_message(message)
     message['id'] = message_id
-
     return message
+
 
 
 if __name__ == '__main__':
