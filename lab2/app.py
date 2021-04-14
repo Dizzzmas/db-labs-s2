@@ -37,7 +37,7 @@ seed_db(r)
 def login():
     if not request.json.get("username"):
         abort(422, message="Missing 'username' in the request body")
-    username = request.json["username"]
+    username: str = request.json["username"]
 
     try:
         login_user(r, username)
@@ -122,7 +122,7 @@ def get_highest_messaging_activity_stats():
 @app.route("/event-journal", methods=["GET"])
 def get_event_journal():
     """ Get a chronological event log. """
-    events = fetch_event_journal(r)
+    events: List[str] = fetch_event_journal(r)
     return dict(events=events)
 
 
