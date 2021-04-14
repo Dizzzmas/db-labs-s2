@@ -22,8 +22,8 @@ def login_user(r: Redis, username: str) -> None:
     elif r.sismember(ONLINE_USERS_SET, username):
         raise AlreadyLoggedInException(username)
 
-    r.publish(EVENT_JOURNAL_CHANNEL, f"LOGIN: {username}")
     r.sadd(ONLINE_USERS_SET, username)
+    r.publish(EVENT_JOURNAL_CHANNEL, f"LOGIN: {username}")
 
 
 def logout_user(r: Redis, username: str) -> None:
@@ -35,7 +35,7 @@ def logout_user(r: Redis, username: str) -> None:
     elif not r.sismember(ONLINE_USERS_SET, username):
         raise NotLoggedInException(username)
 
-    # Notify subscribers about the 'logout' event
-    r.publish(EVENT_JOURNAL_CHANNEL, f"LOGOUT: {username}")
     # Make the user appear offline
     r.srem(ONLINE_USERS_SET, username)
+    # Notify subscribers about the 'logout' event
+    r.publish(EVENT_JOURNAL_CHANNEL, f"LOGOUT: {username}")

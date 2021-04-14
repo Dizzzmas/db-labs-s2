@@ -58,7 +58,7 @@ def create_message(r, message: RawMessage) -> int:
         current_id = p.get(MESSAGE_INDEX)
         new_id = int(current_id) + 1
         p.multi()
-        # Increment the message_id and assign the newly created message to it
+        # Increment the message_id and use it to create a new message
         p.incr(MESSAGE_INDEX, 1)
         p.hset(MESSAGE_HASH, new_id, json.dumps(message))
         # Mark the message as enqueued
@@ -93,14 +93,14 @@ def process_enqueued_message(r: Redis) -> None:
             f"SPAM: message with id {message_id} by {message['sender']}",
         )
         # Increment sender's score for spam messages
-        r.zincrby(USERS_BY_SPAM_MESSAGES_SORTED_SET, [message["sender"]], 1)
+        r.zincrby(USERS_BY_SPAM_MESSAGES_SORTED_SET, 1, message["sender"])
     else:
         # Mark the message as inbound for the recipient
         r.lpush(get_inbound_messages_list_name(message), message_id)
         # Mark the message as delivered
         r.smove(BEING_SPAM_CHECKED_MESSAGES_SET, DELIVERED_MESSAGES_SET, message_id)
         # Increment sender's score for sent messages
-        r.zincrby(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, [message["sender"]], 1)
+        r.zincrby(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, 1, message["sender"])
 
 
 def get_outbound_messages_list_name(message: RawMessage):
