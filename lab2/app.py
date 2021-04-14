@@ -26,7 +26,7 @@ from domain.user import login_user, logout_user
 
 app = Flask(__name__)
 
-app.secret_key = "asdf"
+app.secret_key = "not_safe"
 # Create a connection instance to redis.
 r = redis.Redis("127.0.0.1", decode_responses=True)
 
