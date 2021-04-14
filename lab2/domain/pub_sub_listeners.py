@@ -1,10 +1,22 @@
+import json
+import random
 import threading
 from abc import abstractmethod
 
 from redis import Redis
 
-EVENT_JOURNAL_CHANNEL = "event_journal"
-MESSAGE_QUEUE_CHANNEL = "message_queue"
+from domain.message import MESSAGE_QUEUE, RawMessage, process_enqueued_message
+from domain.redis_structures import (
+    EVENT_JOURNAL_CHANNEL,
+    MESSAGE_QUEUE_CHANNEL,
+    MESSAGE_HASH,
+    ENQUEUED_MESSAGES_SET,
+    SPAM_MESSAGES_SET,
+    BEING_SPAM_CHECKED_MESSAGES_SET,
+    DELIVERED_MESSAGES_SET,
+    USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
+    USERS_BY_SPAM_MESSAGES_SORTED_SET,
+)
 
 
 class PubSubListener(threading.Thread):
@@ -49,5 +61,6 @@ class MessageQueueListener(PubSubListener):
         self.pubsub.subscribe([MESSAGE_QUEUE_CHANNEL])
 
     def work(self, item):
-        print(item["channel"], ":", item["data"])
-        f = "s"
+        if item["type"] != "message":
+            return
+        process_enqueued_message(self.redis)

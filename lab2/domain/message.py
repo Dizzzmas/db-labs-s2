@@ -2,18 +2,28 @@ import json
 from enum import Enum, unique
 from typing import TypedDict
 
-from redis.client import Pipeline
+from redis.client import Pipeline, Redis
+import random
+from time import sleep
 
-from domain.pub_sub_listeners import MESSAGE_QUEUE_CHANNEL
-
-MESSAGE_INDEX = "message_index"  # Stores the id of the latest sent message. Used to generate new ids.
-MESSAGE_QUEUE = (
-    "message_queue"  # List with message ids for in-order spam-checks and delivery
+from domain.redis_structures import (
+    MESSAGE_QUEUE_CHANNEL,
+    MESSAGE_QUEUE,
+    ENQUEUED_MESSAGES_SET,
+    MESSAGE_HASH,
+    MESSAGE_INDEX,
+    OUTBOUND_MESSAGES_LIST,
+    BEING_SPAM_CHECKED_MESSAGES_SET,
+    SPAM_MESSAGES_SET,
+    EVENT_JOURNAL_CHANNEL,
+    USERS_BY_SPAM_MESSAGES_SORTED_SET,
+    DELIVERED_MESSAGES_SET,
+    USERS_BY_DELIVERED_MESSAGES_SORTED_SET,
+    INBOUND_MESSAGES_LIST,
 )
-INBOUND_MESSAGES_LIST = "inbound_messages"  # Pairs username->[received_message_ids]
-OUTBOUND_MESSAGES_LIST = "outbound_messages"  # Pairs username->[send_message_ids]
-MESSAGE_HASH = "message"  # Pairs message_id->message_object
-ENQUEUED_MESSAGES_SET = "messages:enqueued"
+
+
+random.seed(422)
 
 
 @unique
@@ -26,9 +36,7 @@ class MessageDeliveryStatus(Enum):
 
 
 class RawMessage(TypedDict):
-    """Message without the id.
-    Used when we still haven't inserted the message into Redis.
-    """
+    """Message without the id."""
 
     sender: str
     recipient: str
@@ -38,7 +46,6 @@ class RawMessage(TypedDict):
 class Message(RawMessage):
     """
     Message with the id.
-    Used when we fetch the message from Redis.
     """
 
     id: int
@@ -58,9 +65,53 @@ def create_message(r, message: RawMessage) -> int:
         p.sadd(ENQUEUED_MESSAGES_SET, new_id)
         # Push to the queue for processing
         p.lpush(MESSAGE_QUEUE, new_id)
+        # Add the message to the sender's outbound list
+        p.lpush(get_outbound_messages_list_name(message), new_id)
         # Notify the listener that it should call a worker to process a new message in the queue
         p.publish(MESSAGE_QUEUE_CHANNEL, new_id)
 
     # More on Redis transactions here: https://github.com/andymccurdy/redis-py/#pipelines
     message_id: int = r.transaction(create_msg_transaction, MESSAGE_INDEX)[0]
     return message_id
+
+
+def process_enqueued_message(r: Redis) -> None:
+    """ Pop the message from the top of the queue, check it for spam and deliver to the recipient. """
+    message_id = int(r.lpop(MESSAGE_QUEUE))
+    message: RawMessage = json.loads(r.hget(MESSAGE_HASH, message_id))
+    # Mark the message as being checked for spam
+    r.smove(ENQUEUED_MESSAGES_SET, BEING_SPAM_CHECKED_MESSAGES_SET, message_id)
+
+    is_spam: bool = spam_check()
+
+    if is_spam:
+        # Mark the message as spam in Redis
+        r.smove(BEING_SPAM_CHECKED_MESSAGES_SET, SPAM_MESSAGES_SET, message_id)
+        # Make a record about spam in the event_journal
+        r.publish(
+            EVENT_JOURNAL_CHANNEL,
+            f"SPAM: message with id {message_id} by {message['sender']}",
+        )
+        # Increment sender's score for spam messages
+        r.zincrby(USERS_BY_SPAM_MESSAGES_SORTED_SET, [message["sender"]], 1)
+    else:
+        # Mark the message as inbound for the recipient
+        r.lpush(get_inbound_messages_list_name(message), message_id)
+        # Mark the message as delivered
+        r.smove(BEING_SPAM_CHECKED_MESSAGES_SET, DELIVERED_MESSAGES_SET, message_id)
+        # Increment sender's score for sent messages
+        r.zincrby(USERS_BY_DELIVERED_MESSAGES_SORTED_SET, [message["sender"]], 1)
+
+
+def get_outbound_messages_list_name(message: RawMessage):
+    return f"{OUTBOUND_MESSAGES_LIST}:{message['sender']}"
+
+
+def get_inbound_messages_list_name(message: RawMessage):
+    return f"{INBOUND_MESSAGES_LIST}:{message['recipient']}"
+
+
+def spam_check() -> bool:
+    """ Imitate a spam check. """
+    sleep(random.randrange(1, 3))
+    return random.choice([True, False])
