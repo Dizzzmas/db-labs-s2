@@ -7,7 +7,7 @@ from lxml import etree
 import xml.etree.cElementTree as ET
 
 
-INITIAL_URL = "https://rozetka.com.ua/chateau_de_montifaud_3550142637970/p74680656/"
+INITIAL_URL = "https://rozetka.com.ua/acer_nh_q8leu_004/p214604215/"
 
 
 def parse_rozetka_website() -> None:
