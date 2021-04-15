@@ -39,7 +39,9 @@ from the queue, spam checks and sends it. Upon `publish` to `event_journal` chan
 ## Calling the API
 If you're a Mac user and have [Paw](https://paw.cloud/), you can use `lab2.paw`.
 
-Otherwise here are some CURL commands you can run to invoke the API:
+Unfortunately I didn't have time to setup proper API docs with an OpenAPI page.
+
+Here are some CURL commands you can run to invoke the API:
 
 #### Login
 ```
