@@ -6,6 +6,8 @@ You should have [poetry](https://python-poetry.org/) installed.
 poetry install
 python3 app.py
 ```
+After the Flask app is launched you should be able to [call the API](#Calling the API)
+
 
 ## Redis Schema
 [DB Diagram](https://dbdiagram.io/d/6040b727fcdcb6230b228eda)
