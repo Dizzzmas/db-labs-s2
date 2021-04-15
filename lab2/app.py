@@ -88,7 +88,7 @@ def get_inbound_messages():
     """ Get messages received by the user. """
     username: str = request.args.get("username")
     inbound_messages: List[Message] = fetch_user_inbound_messages(r, username)
-    return inbound_messages
+    return dict(inbound_messages=inbound_messages)
 
 
 @app.route("/user-stats", methods=["GET"])
