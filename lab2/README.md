@@ -3,6 +3,7 @@ A simple messaging app built with Flask and Redis.
 
 ## Pre-requisites
 You should have [poetry](https://python-poetry.org/) installed.
+
 [Installing Redis](https://gist.github.com/tomysmile/1b8a321e7c58499ef9f9441b2faa0aa8)
 
 ## Quickstart
