@@ -30,6 +30,7 @@ app.secret_key = "not_safe"
 # Create a connection instance to redis.
 r = redis.Redis("127.0.0.1", decode_responses=True)
 
+r.flushall()
 seed_db(r)
 
 
